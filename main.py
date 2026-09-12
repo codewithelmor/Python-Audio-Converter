@@ -1,4 +1,5 @@
 import logging
+import platform
 import shutil
 import subprocess
 import sys
@@ -836,6 +837,124 @@ def choose_bitrate():
 
 
 # =========================================================
+# Shutdown after processing
+# =========================================================
+
+def detect_os():
+    """
+    Detect the current operating system.
+
+    Returns:
+        "Windows", "macOS", "Linux", or the raw platform.system()
+        value for anything else.
+    """
+
+    system = platform.system()
+
+    if system == "Windows":
+        return "Windows"
+
+    if system == "Darwin":
+        return "macOS"
+
+    if system == "Linux":
+        return "Linux"
+
+    return system
+
+
+def ask_shutdown_after_processing():
+    """
+    Ask the user whether the computer should be force
+    shut down once all processing has finished.
+    """
+
+    os_name = detect_os()
+
+    print()
+    print(f"Detected OS: {os_name}")
+    print()
+
+    while True:
+
+        answer = input(
+            "Shut down the computer after processing finishes? (y/N): "
+        ).strip().lower()
+
+        if answer in ("y", "yes"):
+            return True
+
+        if answer in ("", "n", "no"):
+            return False
+
+        print()
+        print("Invalid choice.")
+        print("Please enter y or n.")
+        print()
+
+
+def shutdown_computer():
+    """
+    Force shut down the computer using the appropriate
+    command for the detected operating system.
+
+    Windows : shutdown /s /f /t 0
+              Forces a shutdown immediately (/t 0), closing
+              open applications without waiting (/f).
+
+    macOS   : sudo shutdown -h now
+    Linux   : sudo shutdown -h now
+              Both require elevated (sudo) privileges. If the
+              account is not configured for passwordless sudo,
+              the terminal will prompt for a password before
+              the shutdown proceeds.
+    """
+
+    os_name = detect_os()
+
+    print()
+    print("=" * 70)
+    print("SHUTTING DOWN COMPUTER")
+    print("=" * 70)
+    print(f"OS detected : {os_name}")
+
+    if os_name == "Windows":
+        command = ["shutdown", "/s", "/f", "/t", "0"]
+
+    elif os_name in ("macOS", "Linux"):
+        command = ["sudo", "shutdown", "-h", "now"]
+
+    else:
+        print(f"Reason      : Unsupported OS ({os_name})")
+        print("Skipping shutdown. Please shut down manually.")
+        print("=" * 70)
+        return
+
+    print(f"Command     : {' '.join(command)}")
+    print("=" * 70)
+
+    try:
+        subprocess.run(command, check=True)
+
+    except FileNotFoundError:
+        print()
+        print("ERROR: Shutdown command not found on this system.")
+        print("Please shut down the computer manually.")
+
+    except subprocess.CalledProcessError as e:
+        print()
+        print("ERROR: Shutdown command failed.")
+        print(f"Reason: {e}")
+
+        if os_name in ("macOS", "Linux"):
+            print(
+                "This usually means the account does not have "
+                "permission to run 'sudo shutdown'. Please shut "
+                "down manually, or configure sudo access."
+            )
+
+
+# =========================================================
 # Main
 # =========================================================
 
@@ -905,6 +1024,12 @@ def main():
     target_bitrate = choose_bitrate()
 
     # -----------------------------------------------------
+    # Ask whether to shut down the computer afterwards
+    # -----------------------------------------------------
+
+    shutdown_requested = ask_shutdown_after_processing()
+
+    # -----------------------------------------------------
     # Start processing
     # -----------------------------------------------------
 
@@ -924,6 +1049,10 @@ def main():
     print(f"MP3 bitrate:")
     print(f"  {target_bitrate} kbps")
 
+    print()
+    print(f"Shut down when finished:")
+    print(f"  {'Yes' if shutdown_requested else 'No'}")
+
     print("=" * 70)
 
     process_directory(
@@ -932,7 +1061,10 @@ def main():
         target_bitrate,
     )
 
-    input("\nPress Enter to exit...")
+    if shutdown_requested:
+        shutdown_computer()
+    else:
+        input("\nPress Enter to exit...")
 
 
 if __name__ == "__main__":

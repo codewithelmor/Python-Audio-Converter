@@ -35,6 +35,7 @@ The script preserves the source folder structure, attempts to preserve audio met
 - Correctly handles non-English filenames, folder names, and metadata (Chinese, Japanese, Korean, Cyrillic, accented Latin, etc.).
 - Counts the total audio files in both the source and target directories before any processing begins.
 - Displays a running `processed / total` progress count while converting, with large numbers formatted using thousands separators (e.g. `1,234 / 12,345`).
+- Optional: automatically detects your OS (Windows, macOS, or Linux) and force shuts down the computer once processing finishes.
 - Never modifies or deletes source files.
 - Can safely be run repeatedly.
 
@@ -150,6 +151,14 @@ Select target MP3 bitrate:
 Enter choice (1-3):
 ```
 
+Finally, it detects your operating system and asks whether to shut down the computer once processing is complete:
+
+```text
+Detected OS: Windows
+
+Shut down the computer after processing finishes? (y/N):
+```
+
 ### Example
 
 ```text
@@ -163,9 +172,13 @@ Select target MP3 bitrate:
   3. 256 kbps
 
 Enter choice (1-3): 2
+
+Detected OS: Windows
+
+Shut down the computer after processing finishes? (y/N): y
 ```
 
-The selected target bitrate is therefore **192 kbps**.
+The selected target bitrate is therefore **192 kbps**, and the computer will force shut down automatically once every file has been processed.
 
 ## Counting Audio Files
 
@@ -203,6 +216,38 @@ The final summary also reports the processed count against the original total:
 ```text
 Files processed:                     3,482 / 3,482
 ```
+
+## Shutdown After Processing
+
+After choosing the bitrate, the script detects your operating system and asks whether it should force shut down the computer once every file has finished processing:
+
+```text
+Detected OS: Windows
+
+Shut down the computer after processing finishes? (y/N):
+```
+
+- Answer **y** (or **yes**) to have the computer shut down automatically after the run completes.
+- Answer **n** (or just press Enter) to skip this — the script will instead wait for you to press Enter before exiting, as before.
+
+Your choice is echoed back in the `SETTINGS` banner so you can double-check it before processing starts.
+
+### Detected OS and shutdown command
+
+| Detected OS | Command used              |
+|-------------|----------------------------|
+| Windows     | `shutdown /s /f /t 0`      |
+| macOS       | `sudo shutdown -h now`     |
+| Linux       | `sudo shutdown -h now`     |
+
+- **Windows**: `/f` forces running applications to close without waiting, and `/t 0` shuts down immediately.
+- **macOS / Linux**: `sudo shutdown -h now` shuts down immediately. Because this requires elevated privileges, your terminal may prompt for your password before the shutdown proceeds. If the account is configured for passwordless `sudo`, no prompt will appear.
+
+### Important notes
+
+- **This is a genuine, immediate, forced shutdown** — save any other open work before answering "yes". The `/f` flag (Windows) and `shutdown -h now` (macOS/Linux) do not wait for other applications to save their state.
+- If the shutdown command isn't available, or the account lacks permission to run it (e.g. `sudo` on macOS/Linux fails), the script prints an error and leaves the computer running — you can then shut it down manually.
+- If your OS isn't Windows, macOS, or Linux, the script skips the shutdown step and lets you know.
 
 ## Bitrate Rules
 
@@ -484,6 +529,10 @@ Select target MP3 bitrate:
 
 Enter choice (1-3): 2
 
+Detected OS: Windows
+
+Shut down the computer after processing finishes? (y/N): n
+
 ======================================================================
 SETTINGS
 ======================================================================
@@ -496,6 +545,9 @@ Target:
 
 MP3 bitrate:
   192 kbps
+
+Shut down when finished:
+  No
 
 ======================================================================
 
