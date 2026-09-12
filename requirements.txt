@@ -1,0 +1,5 @@
+# No third-party Python dependencies.
+# The script uses only the Python standard library.
+#
+# External runtime dependency:
+# FFmpeg + FFprobe
