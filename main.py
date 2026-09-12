@@ -1,6 +1,8 @@
 import logging
 import shutil
 import subprocess
+import sys
+import unicodedata
 from datetime import datetime
 from pathlib import Path
 
@@ -38,6 +40,64 @@ ALLOWED_BITRATES = {
     "2": 192,
     "3": 256,
 }
+
+
+# =========================================================
+# Unicode / non-English filename support
+# =========================================================
+
+def configure_utf8_console():
+    """
+    Make stdin/stdout/stderr use UTF-8 so that filenames and
+    metadata containing non-English characters (Chinese,
+    Japanese, Korean, Cyrillic, accented Latin, etc.) can
+    always be printed and typed without crashing.
+
+    Without this, running the script on Windows (where the
+    console often defaults to a legacy code page such as
+    cp1252 or cp936) can raise UnicodeEncodeError as soon as
+    a non-ASCII filename is printed.
+
+    `errors="replace"` is used so that, in the rare case a
+    character truly cannot be displayed by the current
+    terminal font, the script substitutes a placeholder
+    instead of crashing.
+    """
+
+    for stream_name in ("stdin", "stdout", "stderr"):
+        stream = getattr(sys, stream_name, None)
+
+        if stream is not None and hasattr(stream, "reconfigure"):
+            try:
+                stream.reconfigure(encoding="utf-8", errors="replace")
+            except (ValueError, OSError):
+                # Some environments (e.g. redirected/piped streams)
+                # may not support reconfiguration. Safe to ignore.
+                pass
+
+
+def normalize_path(path):
+    """
+    Normalize the Unicode form of a path's components.
+
+    Some filesystems (notably older macOS setups) store
+    non-English filenames in NFD (decomposed) form, while
+    Windows and most Linux filesystems expect/produce NFC
+    (composed) form. The same visible name (e.g. "café" or
+    Japanese text with combining marks) can therefore end up
+    as two different byte sequences.
+
+    Normalizing every path component to NFC keeps filenames
+    consistent between the source scan and the target
+    directory, so that "does the target already exist?"
+    checks behave correctly regardless of platform.
+    """
+
+    normalized_parts = [
+        unicodedata.normalize("NFC", part) for part in path.parts
+    ]
+
+    return Path(*normalized_parts)
 
 
 # =========================================================
@@ -149,6 +209,8 @@ def get_mp3_bitrate(file_path):
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             check=True,
         )
 
@@ -188,6 +250,13 @@ def convert_to_mp3(source, target, target_bitrate):
         - Date/year
         - Comments
         - Embedded album artwork
+
+    Non-English metadata (Chinese, Japanese, Korean, Cyrillic,
+    accented Latin, etc.) is preserved using ID3v2.3 tags,
+    which store text as Unicode and therefore support any
+    script. The legacy ID3v1 tag is intentionally NOT written
+    (see below) because it can only store Latin-1 text and
+    would silently corrupt or truncate non-English metadata.
     """
 
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -230,8 +299,18 @@ def convert_to_mp3(source, target, target_bitrate):
         # MP3 metadata compatibility
         # -------------------------------------------------
 
+        # ID3v2.3 stores text as Unicode (UTF-16), so Chinese,
+        # Japanese, Korean, Cyrillic, accented Latin, etc. are
+        # preserved correctly and are widely supported by
+        # modern music players and library applications.
         "-id3v2_version", "3",
-        "-write_id3v1", "1",
+
+        # ID3v1 is intentionally disabled. It can only store
+        # Latin-1 text, so writing it alongside non-English
+        # metadata would silently mangle or drop the title,
+        # artist, album, etc. ID3v2.3 above already provides
+        # broad player compatibility without this limitation.
+        "-write_id3v1", "0",
 
         # Output
         str(target),
@@ -250,6 +329,8 @@ def convert_to_mp3(source, target, target_bitrate):
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
+        encoding="utf-8",
+        errors="replace",
     )
 
     if result.returncode != 0:
@@ -319,6 +400,11 @@ def process_file(
     """
 
     relative_path = source_file.relative_to(source_root)
+
+    # Normalize Unicode form (e.g. NFD -> NFC) so that
+    # non-English filenames are matched/created consistently
+    # across different filesystems and operating systems.
+    relative_path = normalize_path(relative_path)
 
     # MP3 keeps its filename.
     # Non-MP3 files receive an .mp3 extension.
@@ -683,6 +769,12 @@ def choose_bitrate():
 # =========================================================
 
 def main():
+
+    # Ensure non-English filenames and console I/O (Chinese,
+    # Japanese, Korean, Cyrillic, accented Latin, etc.) are
+    # handled correctly regardless of the OS/terminal default
+    # encoding.
+    configure_utf8_console()
 
     print()
     print("=" * 70)

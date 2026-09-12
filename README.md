@@ -32,6 +32,7 @@ The script preserves the source folder structure, attempts to preserve audio met
   - Other compatible metadata
   - Embedded album artwork
 - Skips processing when the corresponding target `.mp3` already exists.
+- Correctly handles non-English filenames, folder names, and metadata (Chinese, Japanese, Korean, Cyrillic, accented Latin, etc.).
 - Never modifies or deletes source files.
 - Can safely be run repeatedly.
 
@@ -299,7 +300,7 @@ The script attempts to preserve:
 
 Embedded album artwork is also mapped to the output MP3 when available.
 
-The resulting MP3 uses ID3v2.3 metadata for broad compatibility with music players and library applications.
+The resulting MP3 uses ID3v2.3 metadata for broad compatibility with music players and library applications. ID3v2.3 stores text as Unicode, so titles, artists, albums, and comments in any script (Chinese, Japanese, Korean, Cyrillic, accented Latin, etc.) are preserved correctly. The legacy ID3v1 tag is intentionally **not** written, because ID3v1 can only store Latin-1 text and would silently corrupt or truncate non-English metadata.
 
 ### Metadata limitations
 
@@ -316,6 +317,29 @@ Some format-specific or proprietary tags cannot be represented exactly in an MP3
 Therefore, the script preserves compatible metadata where possible but cannot guarantee that every source-specific tag survives conversion.
 
 The same applies to album artwork. Embedded artwork is preserved where FFmpeg can read and map it, and it may be converted into an MP3-compatible image format.
+
+One additional limitation: some very old MP3 files store tags in ID3v1 or ID3v2.2 without recording which text encoding was used (for example, Shift-JIS for Japanese or GBK for Chinese, instead of Unicode). FFmpeg cannot reliably auto-detect this, so such legacy tags may not convert perfectly. Files tagged with modern ID3v2.3/2.4, Vorbis Comments, or MP4 metadata (the common case for FLAC, M4A, and modern MP3 files) are unaffected.
+
+## Unicode / Non-English Filenames and Metadata
+
+The script is designed to work correctly with non-English filenames, folder names, and metadata, including Chinese, Japanese, Korean, Cyrillic, and accented Latin characters.
+
+Specifically, it:
+
+- **Prints and reads console text as UTF-8.** On startup, the script reconfigures the console so that non-English filenames can always be displayed and typed, even on Windows systems where the console traditionally defaults to a legacy code page (which otherwise causes crashes when printing filenames like `楽曲.mp3`).
+- **Normalizes filename Unicode form.** The same visible filename can be stored as different byte sequences depending on the OS (for example, macOS may decompose accented/CJK characters into an NFD form, while Windows and most Linux filesystems use NFC). The script normalizes every path to NFC form so that "does the target already exist?" checks work consistently across platforms.
+- **Preserves Unicode metadata.** As described above, output files use ID3v2.3 (Unicode-capable) tags and skip the Latin-1-only ID3v1 tag, so titles, artists, albums, and comments in any script are not corrupted.
+- **Decodes FFmpeg/FFprobe output safely.** Any diagnostic text from FFmpeg or FFprobe is decoded as UTF-8 with safe fallback substitution, so the script never crashes even if a message contains unexpected characters.
+
+### Windows console tip
+
+If you are running the script from the classic `cmd.exe` and still see garbled characters (rather than a crash), switch the console to the UTF-8 code page first:
+
+```powershell
+chcp 65001
+```
+
+Windows Terminal and PowerShell 7+ generally do not require this.
 
 ## Supported Audio Extensions
 
