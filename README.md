@@ -347,6 +347,22 @@ The current extension list includes:
 
 FFmpeg supports additional audio formats. If your collection contains an extension not listed above, add it to `AUDIO_EXTENSIONS` in `main.py`.
 
+## Logging
+
+Every run writes two separate log files to a `logs` folder inside the **target** directory:
+
+```text
+D:\Converted Music
+└── logs
+    ├── success.log   # copied, converted, and skipped files
+    └── errors.log    # failed files and unexpected errors
+```
+
+- `success.log` records every file that was **copied**, **converted**, or **skipped** (already existed), along with the reason and relevant bitrate.
+- `errors.log` records every file that **failed** to process (FFmpeg errors, copy failures, unexpected exceptions), along with the reason.
+- Each run appends a `Run started` marker and a final `SUMMARY` line (files found, copied, converted, skipped, failed) to **both** log files, so history from previous runs is preserved.
+- The log file paths are also printed to the console at the end of each run.
+
 ## Safety
 
 The source files are never modified.

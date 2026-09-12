@@ -1,5 +1,7 @@
+import logging
 import shutil
 import subprocess
+from datetime import datetime
 from pathlib import Path
 
 
@@ -36,6 +38,61 @@ ALLOWED_BITRATES = {
     "2": 192,
     "3": 256,
 }
+
+
+# =========================================================
+# Logging
+# =========================================================
+
+def setup_loggers(target_root):
+    """
+    Create two separate log files inside the target directory:
+
+        logs/success.log  -> copied / converted / skipped files
+        logs/errors.log    -> failed files and unexpected errors
+
+    Each logger writes only to its own file (propagate is
+    disabled so messages never leak into the other log or
+    the console).
+    """
+
+    logs_dir = target_root / "logs"
+    logs_dir.mkdir(parents=True, exist_ok=True)
+
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    formatter = logging.Formatter("%(asctime)s | %(message)s", "%Y-%m-%d %H:%M:%S")
+
+    # ---- Success logger --------------------------------------------------
+    success_logger = logging.getLogger("audio_converter.success")
+    success_logger.setLevel(logging.INFO)
+    success_logger.propagate = False
+    if not success_logger.handlers:
+        success_handler = logging.FileHandler(
+            logs_dir / "success.log", encoding="utf-8"
+        )
+        success_handler.setFormatter(formatter)
+        success_logger.addHandler(success_handler)
+
+    # ---- Error logger ------------------------------------------------------
+    error_logger = logging.getLogger("audio_converter.errors")
+    error_logger.setLevel(logging.INFO)
+    error_logger.propagate = False
+    if not error_logger.handlers:
+        error_handler = logging.FileHandler(
+            logs_dir / "errors.log", encoding="utf-8"
+        )
+        error_handler.setFormatter(formatter)
+        error_logger.addHandler(error_handler)
+
+    success_logger.info("=" * 70)
+    success_logger.info(f"Run started {timestamp}")
+    success_logger.info("=" * 70)
+
+    error_logger.info("=" * 70)
+    error_logger.info(f"Run started {timestamp}")
+    error_logger.info("=" * 70)
+
+    return success_logger, error_logger
 
 
 # =========================================================
@@ -248,7 +305,14 @@ def copy_mp3(source, target):
 # Process one file
 # =========================================================
 
-def process_file(source_file, source_root, target_root, target_bitrate):
+def process_file(
+    source_file,
+    source_root,
+    target_root,
+    target_bitrate,
+    success_logger,
+    error_logger,
+):
     """
     Process one audio file while preserving its directory
     structure.
@@ -275,6 +339,11 @@ def process_file(source_file, source_root, target_root, target_bitrate):
         print(f"  Target : {target_file}")
         print("  Reason : Target MP3 already exists")
 
+        success_logger.info(
+            f"SKIP | source={source_file} | target={target_file} "
+            f"| reason=Target MP3 already exists"
+        )
+
         return "skipped"
 
     # -----------------------------------------------------
@@ -299,8 +368,18 @@ def process_file(source_file, source_root, target_root, target_bitrate):
                 target_file,
                 target_bitrate,
             ):
+                success_logger.info(
+                    f"CONVERT | source={source_file} | target={target_file} "
+                    f"| reason=Bitrate could not be determined "
+                    f"| bitrate={target_bitrate}kbps"
+                )
                 return "converted"
 
+            error_logger.info(
+                f"FAILED | source={source_file} | target={target_file} "
+                f"| reason=Conversion failed (unknown source bitrate) "
+                f"| bitrate={target_bitrate}kbps"
+            )
             return "failed"
 
         print()
@@ -322,8 +401,18 @@ def process_file(source_file, source_root, target_root, target_bitrate):
         if bitrate <= target_bitrate:
 
             if copy_mp3(source_file, target_file):
+                success_logger.info(
+                    f"COPY | source={source_file} | target={target_file} "
+                    f"| reason=MP3 already at or below {target_bitrate}kbps "
+                    f"| source_bitrate={bitrate}kbps"
+                )
                 return "copied"
 
+            error_logger.info(
+                f"FAILED | source={source_file} | target={target_file} "
+                f"| reason=Copy failed "
+                f"| source_bitrate={bitrate}kbps"
+            )
             return "failed"
 
         # -------------------------------------------------
@@ -346,8 +435,17 @@ def process_file(source_file, source_root, target_root, target_bitrate):
             target_file,
             target_bitrate,
         ):
+            success_logger.info(
+                f"CONVERT | source={source_file} | target={target_file} "
+                f"| reason=Re-encode {bitrate}kbps -> {target_bitrate}kbps"
+            )
             return "converted"
 
+        error_logger.info(
+            f"FAILED | source={source_file} | target={target_file} "
+            f"| reason=Re-encode failed "
+            f"| source_bitrate={bitrate}kbps -> {target_bitrate}kbps"
+        )
         return "failed"
 
     # -----------------------------------------------------
@@ -364,8 +462,17 @@ def process_file(source_file, source_root, target_root, target_bitrate):
         target_file,
         target_bitrate,
     ):
+        success_logger.info(
+            f"CONVERT | source={source_file} | target={target_file} "
+            f"| reason=Non-MP3 converted to {target_bitrate}kbps"
+        )
         return "converted"
 
+    error_logger.info(
+        f"FAILED | source={source_file} | target={target_file} "
+        f"| reason=Non-MP3 conversion failed "
+        f"| target_bitrate={target_bitrate}kbps"
+    )
     return "failed"
 
 
@@ -407,6 +514,12 @@ def process_directory(source_path, target_path, target_bitrate):
     # -----------------------------------------------------
 
     target_root.mkdir(parents=True, exist_ok=True)
+
+    # -----------------------------------------------------
+    # Logging
+    # -----------------------------------------------------
+
+    success_logger, error_logger = setup_loggers(target_root)
 
     # -----------------------------------------------------
     # Statistics
@@ -457,6 +570,8 @@ def process_directory(source_path, target_path, target_bitrate):
                 source_root,
                 target_root,
                 target_bitrate,
+                success_logger,
+                error_logger,
             )
 
             if result == "skipped":
@@ -487,6 +602,11 @@ def process_directory(source_path, target_path, target_bitrate):
 
             print("=" * 70)
 
+            error_logger.info(
+                f"FAILED | source={file_path} | target=N/A "
+                f"| reason=Unexpected error: {e}"
+            )
+
             total_failed += 1
 
     # -----------------------------------------------------
@@ -510,7 +630,22 @@ def process_directory(source_path, target_path, target_bitrate):
     print("Output directory:")
     print(f"  {target_root}")
 
+    logs_dir = target_root / "logs"
+
+    print()
+    print("Log files:")
+    print(f"  {logs_dir / 'success.log'}")
+    print(f"  {logs_dir / 'errors.log'}")
+
     print("=" * 70)
+
+    summary = (
+        f"SUMMARY | bitrate={target_bitrate}kbps | found={total_audio} "
+        f"| copied={total_mp3_copied} | converted={total_converted} "
+        f"| skipped={total_skipped} | failed={total_failed}"
+    )
+    success_logger.info(summary)
+    error_logger.info(summary)
 
 
 # =========================================================
