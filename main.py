@@ -43,6 +43,34 @@ ALLOWED_BITRATES = {
 
 
 # =========================================================
+# Counting audio files
+# =========================================================
+
+def count_audio_files(directory):
+    """
+    Recursively count audio files in a directory whose
+    extension is in AUDIO_EXTENSIONS.
+
+    Returns 0 if the directory does not exist (this is the
+    normal case for a target directory on the very first run,
+    before it has been created).
+    """
+
+    directory = Path(directory)
+
+    if not directory.exists() or not directory.is_dir():
+        return 0
+
+    count = 0
+
+    for file_path in directory.rglob("*"):
+        if file_path.is_file() and file_path.suffix.lower() in AUDIO_EXTENSIONS:
+            count += 1
+
+    return count
+
+
+# =========================================================
 # Unicode / non-English filename support
 # =========================================================
 
@@ -572,6 +600,27 @@ def process_directory(source_path, target_path, target_bitrate):
     target_root = Path(target_path).resolve()
 
     # -----------------------------------------------------
+    # Count audio files first, before doing anything else.
+    #
+    # This runs even before validating the paths, so the
+    # person running the script immediately sees how many
+    # audio files exist on each side.
+    # -----------------------------------------------------
+
+    print()
+    print("=" * 70)
+    print("COUNTING AUDIO FILES")
+    print("=" * 70)
+
+    total_source_audio = count_audio_files(source_root)
+    print(f"Source audio files found : {total_source_audio:,}")
+
+    total_target_audio = count_audio_files(target_root)
+    print(f"Target audio files found : {total_target_audio:,}")
+
+    print("=" * 70)
+
+    # -----------------------------------------------------
     # Validate source
     # -----------------------------------------------------
 
@@ -611,7 +660,7 @@ def process_directory(source_path, target_path, target_bitrate):
     # Statistics
     # -----------------------------------------------------
 
-    total_audio = 0
+    total_processed = 0
     total_skipped = 0
     total_mp3_copied = 0
     total_converted = 0
@@ -637,6 +686,14 @@ def process_directory(source_path, target_path, target_bitrate):
     print(f"Selected bitrate:")
     print(f"  {target_bitrate} kbps")
 
+    print()
+    print(f"Source audio files found:")
+    print(f"  {total_source_audio:,}")
+
+    print()
+    print(f"Target audio files found:")
+    print(f"  {total_target_audio:,}")
+
     print("=" * 70)
 
     for file_path in source_root.rglob("*"):
@@ -647,7 +704,12 @@ def process_directory(source_path, target_path, target_bitrate):
         if file_path.suffix.lower() not in AUDIO_EXTENSIONS:
             continue
 
-        total_audio += 1
+        total_processed += 1
+
+        print()
+        print(
+            f"[{total_processed:,} / {total_source_audio:,} total files]"
+        )
 
         try:
 
@@ -705,12 +767,18 @@ def process_directory(source_path, target_path, target_bitrate):
     print("PROCESSING COMPLETE")
     print("=" * 70)
 
-    print(f"Selected bitrate:              {target_bitrate} kbps")
-    print(f"Total audio files found:       {total_audio}")
-    print(f"MP3 files copied unchanged:    {total_mp3_copied}")
-    print(f"Files converted to MP3:        {total_converted}")
-    print(f"Files skipped:                  {total_skipped}")
-    print(f"Failed:                         {total_failed}")
+    print(f"Selected bitrate:                    {target_bitrate} kbps")
+    print(f"Source audio files (before run):     {total_source_audio:,}")
+    print(f"Target audio files (before run):     {total_target_audio:,}")
+    print()
+    print(
+        f"Files processed:                     "
+        f"{total_processed:,} / {total_source_audio:,}"
+    )
+    print(f"MP3 files copied unchanged:           {total_mp3_copied:,}")
+    print(f"Files converted to MP3:              {total_converted:,}")
+    print(f"Files skipped:                        {total_skipped:,}")
+    print(f"Failed:                               {total_failed:,}")
 
     print()
     print("Output directory:")
@@ -726,7 +794,10 @@ def process_directory(source_path, target_path, target_bitrate):
     print("=" * 70)
 
     summary = (
-        f"SUMMARY | bitrate={target_bitrate}kbps | found={total_audio} "
+        f"SUMMARY | bitrate={target_bitrate}kbps "
+        f"| source_found={total_source_audio} "
+        f"| target_found_before_run={total_target_audio} "
+        f"| processed={total_processed} "
         f"| copied={total_mp3_copied} | converted={total_converted} "
         f"| skipped={total_skipped} | failed={total_failed}"
     )

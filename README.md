@@ -33,6 +33,8 @@ The script preserves the source folder structure, attempts to preserve audio met
   - Embedded album artwork
 - Skips processing when the corresponding target `.mp3` already exists.
 - Correctly handles non-English filenames, folder names, and metadata (Chinese, Japanese, Korean, Cyrillic, accented Latin, etc.).
+- Counts the total audio files in both the source and target directories before any processing begins.
+- Displays a running `processed / total` progress count while converting, with large numbers formatted using thousands separators (e.g. `1,234 / 12,345`).
 - Never modifies or deletes source files.
 - Can safely be run repeatedly.
 
@@ -164,6 +166,43 @@ Enter choice (1-3): 2
 ```
 
 The selected target bitrate is therefore **192 kbps**.
+
+## Counting Audio Files
+
+Before any scanning, copying, or converting takes place, the script counts the total number of audio files already present in **both** the source directory and the target directory. These counts are shown immediately, before anything else happens:
+
+```text
+======================================================================
+COUNTING AUDIO FILES
+======================================================================
+Source audio files found : 3,482
+Target audio files found : 1,205
+======================================================================
+```
+
+- **Source audio files found** — how many audio files (of the supported extensions) exist anywhere under the source directory. This is the total the script will work through.
+- **Target audio files found** — how many audio files already exist under the target directory before this run starts (0 on a brand-new target).
+
+Large numbers are always displayed with thousands separators (e.g. `12,345`) for readability.
+
+### Progress while processing
+
+While processing files, the script shows a running `processed / total` count above each file's action, so you always know how far through the library it is:
+
+```text
+[1,204 / 3,482 total files]
+
+CONVERT
+  Source : D:\Music\Rock\Song B.mp3
+  Target : D:\Converted Music\Rock\Song B.mp3
+  ...
+```
+
+The final summary also reports the processed count against the original total:
+
+```text
+Files processed:                     3,482 / 3,482
+```
 
 ## Bitrate Rules
 
@@ -460,6 +499,34 @@ MP3 bitrate:
 
 ======================================================================
 
+======================================================================
+COUNTING AUDIO FILES
+======================================================================
+Source audio files found : 3
+Target audio files found : 0
+======================================================================
+
+======================================================================
+SCANNING SOURCE DIRECTORY
+======================================================================
+Source:
+  D:\Music
+
+Target:
+  D:\Converted Music
+
+Selected bitrate:
+  192 kbps
+
+Source audio files found:
+  3
+
+Target audio files found:
+  0
+======================================================================
+
+[1 / 3 total files]
+
 MP3 FOUND
   File    : D:\Music\Rock\Song A.mp3
   Bitrate : 128 kbps
@@ -470,6 +537,8 @@ COPY
   Target : D:\Converted Music\Rock\Song A.mp3
   Reason : MP3 already meets the selected bitrate
   Mode   : Exact file copy
+
+[2 / 3 total files]
 
 MP3 FOUND
   File    : D:\Music\Rock\Song B.mp3
@@ -484,6 +553,8 @@ CONVERT
   Tags   : Preserving metadata
   Art    : Preserving embedded album art
 
+[3 / 3 total files]
+
 SKIP
   Source : D:\Music\Jazz\Song C.flac
   Target : D:\Converted Music\Jazz\Song C.mp3
@@ -492,17 +563,22 @@ SKIP
 ======================================================================
 PROCESSING COMPLETE
 ======================================================================
+Selected bitrate:                    192 kbps
+Source audio files (before run):     3
+Target audio files (before run):     0
 
-Selected bitrate:              192 kbps
-Total audio files found:       3
-MP3 files copied unchanged:    1
-Files converted to MP3:        1
-Files skipped:                 1
-Failed:                        0
+Files processed:                     3 / 3
+MP3 files copied unchanged:          1
+Files converted to MP3:              1
+Files skipped:                        1
+Failed:                                0
 
 Output directory:
   D:\Converted Music
 
+Log files:
+  D:\Converted Music\logs\success.log
+  D:\Converted Music\logs\errors.log
 ======================================================================
 ```
 
